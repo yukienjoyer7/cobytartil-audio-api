@@ -1,10 +1,10 @@
 import os
+import tempfile
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from huggingface_hub import InferenceClient
+from faster_whisper import WhisperModel
 
-HF_TOKEN = os.environ["HF_TOKEN"]
-hf = InferenceClient(token=HF_TOKEN, provider="hf-inference")
+_model = WhisperModel("base", device="cpu", compute_type="int8")
 
 app = FastAPI()
 app.add_middleware(
@@ -23,12 +23,15 @@ async def health():
 @app.post("/transcribe")
 async def transcribe(file: UploadFile):
     audio = await file.read()
+    suffix = ".webm" if (file.content_type or "").startswith("video") else ".mp3"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(audio)
+        tmp_path = tmp.name
     try:
-        result = hf.automatic_speech_recognition(
-            audio,
-            model="openai/whisper-large-v3",
-            extra_body={"language": "arabic", "task": "transcribe"},
-        )
+        segments, _ = _model.transcribe(tmp_path, language="ar", task="transcribe")
+        text = "".join(s.text for s in segments).strip()
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    return {"text": result.text}
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        os.unlink(tmp_path)
+    return {"text": text}
