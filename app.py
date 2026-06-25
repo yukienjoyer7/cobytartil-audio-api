@@ -1,5 +1,3 @@
-import base64
-import json
 import os
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,15 +24,11 @@ async def health():
 async def transcribe(file: UploadFile):
     audio = await file.read()
     try:
-        raw = hf.post(
-            json={
-                "inputs": base64.b64encode(audio).decode(),
-                "parameters": {"language": "arabic", "task": "transcribe"},
-            },
+        result = hf.automatic_speech_recognition(
+            audio,
             model="openai/whisper-large-v3",
-            task="automatic-speech-recognition",
+            extra_body={"language": "arabic", "task": "transcribe"},
         )
-        result = json.loads(raw)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
-    return result
+    return {"text": result.text}
