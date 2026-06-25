@@ -1,24 +1,11 @@
-import mimetypes
+import base64
 import os
-import tempfile
+import httpx
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from huggingface_hub import InferenceClient
 
-# Python maps .webm → video/webm by default; override so HF accepts it
-mimetypes.add_type("audio/webm", ".webm")
-
-_EXT = {
-    "audio/mpeg": ".mp3", "audio/mp3": ".mp3",
-    "audio/wav": ".wav", "audio/wave": ".wav", "audio/x-wav": ".wav",
-    "audio/webm": ".webm", "video/webm": ".webm",
-    "audio/ogg": ".ogg",
-    "audio/flac": ".flac", "audio/x-flac": ".flac",
-    "audio/m4a": ".m4a", "audio/x-m4a": ".m4a",
-}
-
+HF_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3"
 HF_TOKEN = os.environ["HF_TOKEN"]
-client = InferenceClient(token=HF_TOKEN)
 
 app = FastAPI()
 app.add_middleware(
@@ -32,18 +19,15 @@ app.add_middleware(
 @app.post("/transcribe")
 async def transcribe(file: UploadFile):
     audio = await file.read()
-    ext = _EXT.get(file.content_type or "", ".webm")
-    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-        tmp.write(audio)
-        tmp_path = tmp.name
-    try:
-        result = client.automatic_speech_recognition(
-            tmp_path,
-            model="openai/whisper-large-v3",
-            generate_kwargs={"language": "arabic", "task": "transcribe"},
+    async with httpx.AsyncClient(timeout=60) as client:
+        r = await client.post(
+            HF_URL,
+            json={
+                "inputs": base64.b64encode(audio).decode(),
+                "parameters": {"language": "arabic", "task": "transcribe"},
+            },
+            headers={"Authorization": f"Bearer {HF_TOKEN}"},
         )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    finally:
-        os.unlink(tmp_path)
-    return {"text": result.text}
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    return r.json()
