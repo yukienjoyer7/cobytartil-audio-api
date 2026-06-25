@@ -16,18 +16,26 @@ app.add_middleware(
 )
 
 
+@app.get("/")
+async def health():
+    return {"status": "ok"}
+
+
 @app.post("/transcribe")
 async def transcribe(file: UploadFile):
     audio = await file.read()
-    async with httpx.AsyncClient(timeout=60) as client:
-        r = await client.post(
-            HF_URL,
-            json={
-                "inputs": base64.b64encode(audio).decode(),
-                "parameters": {"language": "arabic", "task": "transcribe"},
-            },
-            headers={"Authorization": f"Bearer {HF_TOKEN}"},
-        )
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(
+                HF_URL,
+                json={
+                    "inputs": base64.b64encode(audio).decode(),
+                    "parameters": {"language": "arabic", "task": "transcribe"},
+                },
+                headers={"Authorization": f"Bearer {HF_TOKEN}"},
+            )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Network error: {e}")
     if r.status_code != 200:
         raise HTTPException(status_code=r.status_code, detail=r.text)
     return r.json()
