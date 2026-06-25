@@ -1,11 +1,12 @@
 import base64
+import json
 import os
-import httpx
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from huggingface_hub import InferenceClient
 
-HF_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3"
 HF_TOKEN = os.environ["HF_TOKEN"]
+hf = InferenceClient(token=HF_TOKEN)
 
 app = FastAPI()
 app.add_middleware(
@@ -25,17 +26,15 @@ async def health():
 async def transcribe(file: UploadFile):
     audio = await file.read()
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            r = await client.post(
-                HF_URL,
-                json={
-                    "inputs": base64.b64encode(audio).decode(),
-                    "parameters": {"language": "arabic", "task": "transcribe"},
-                },
-                headers={"Authorization": f"Bearer {HF_TOKEN}"},
-            )
+        raw = hf.post(
+            json={
+                "inputs": base64.b64encode(audio).decode(),
+                "parameters": {"language": "arabic", "task": "transcribe"},
+            },
+            model="openai/whisper-large-v3",
+            task="automatic-speech-recognition",
+        )
+        result = json.loads(raw)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Network error: {e}")
-    if r.status_code != 200:
-        raise HTTPException(status_code=r.status_code, detail=r.text)
-    return r.json()
+        raise HTTPException(status_code=502, detail=str(e))
+    return result
