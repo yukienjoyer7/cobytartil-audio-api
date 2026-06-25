@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from huggingface_hub import InferenceClient
 
 HF_TOKEN = os.environ["HF_TOKEN"]
-hf = InferenceClient(token=HF_TOKEN)
+hf = InferenceClient(token=HF_TOKEN, provider="hf-inference")
 
 app = FastAPI()
 app.add_middleware(
