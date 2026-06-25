@@ -38,7 +38,9 @@ async def transcribe(file: UploadFile):
         tmp_path = tmp.name
     try:
         result = client.automatic_speech_recognition(
-            tmp_path, model="tarteel-ai/whisper-base-ar-quran"
+            tmp_path,
+            model="openai/whisper-large-v3",
+            generate_kwargs={"language": "arabic", "task": "transcribe"},
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
