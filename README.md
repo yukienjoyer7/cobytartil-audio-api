@@ -2,7 +2,7 @@
 title: cobytartil-audio-api
 emoji: 🎙️
 colorFrom: green
-colorTo: teal
+colorTo: green
 sdk: docker
 pinned: false
 ---
